@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: python-web-server-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: python-web-server
+  template:
+    metadata:
+      labels:
+        app: python-web-server
+    spec:
+      containers:
+      - name: python-web-server-container
+        image: python:3.8  # Use the Python image or your custom image
+        ports:
+        - containerPort: 5000
+        command: ["python", "/app/main.py"]  # Command to run the Python application
+        volumeMounts:
+        - name: app-source
+          mountPath: /app
+      volumes:
+      - name: app-source
+        configMap:
+          name: python-web-server-config
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: python-web-server-config
+data:
+  main.py: |
+    from flask import Flask
+
+    app = Flask(__name__)
+
+    @app.route('/')
+    def hello():
+        return "Hello, World! This is your Python web server."
+
+    if __name__ == '__main__':
+        app.run(host='0.0.0.0', port=5000)
+
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: python-web-server
+spec:
+  selector:
+    app: web-server
+  type: LoadBalancer
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 5000
