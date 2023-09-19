@@ -3,7 +3,6 @@ kind: Deployment
 metadata:
   name: python-web-server-deployment
 spec:
-  replicas: 1
   selector:
     matchLabels:
       app: python-web-server
@@ -14,7 +13,7 @@ spec:
     spec:
       containers:
       - name: python-web-server-container
-        image: python:3.8  # Use the Python image or your custom image
+        image: philwinder/prometheus-python  # Use the Python image or your custom image
         ports:
         - containerPort: 5000
         command: ["python", "/app/main.py"]  # Command to run the Python application
@@ -33,12 +32,26 @@ metadata:
 data:
   main.py: |
     from flask import Flask
+    from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
+    from flask import Response
 
     app = Flask(__name__)
 
+    # Create a Prometheus counter to count requests
+    requests_total = Counter(
+        'http_requests_total', 'Total number of HTTP requests received', ['method', 'endpoint']
+    )
+
     @app.route('/')
     def hello():
-        return "Hello, World! This is your Python web server."
+        # Increment the request count metric for the '/' endpoint
+        requests_total.labels(method='GET', endpoint='/').inc()
+        return "Hello, World! This is your Python web server. prometheus"
+
+    @app.route('/metrics')
+    def metrics():
+        # Expose Prometheus metrics
+        return Response(generate_latest(), content_type=CONTENT_TYPE_LATEST)
 
     if __name__ == '__main__':
         app.run(host='0.0.0.0', port=5000)
@@ -52,7 +65,7 @@ metadata:
   name: python-web-server
 spec:
   selector:
-    app: web-server
+    app: python-web-server
   type: LoadBalancer
   ports:
     - protocol: TCP
