@@ -84,6 +84,7 @@ data:
         api_instance = client.BatchV1Api()
 
         pod_labels = job_labels = {"app": "nginx-server"}
+        container_args = ["/bin/sh", "-c", "date; echo sleeping....; sleep 30s; exit 0"]
 
         # Define the Job specification.
         job = client.V1Job(
@@ -97,14 +98,15 @@ data:
                         containers=[
                             client.V1Container(
                                 name="nginx-server",
-                                image="nginx",
-                                ports=[client.V1ContainerPort(container_port=80)]
+                                image="busybox",
+                                ports=[client.V1ContainerPort(container_port=80)],
+                                args=container_args,
                             )
                         ],
                         restart_policy="Never",
                     )
                 ),
-                active_deadline_seconds=10,
+                active_deadline_seconds=60,
                 completions=1
             ),
         )
