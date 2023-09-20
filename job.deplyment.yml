@@ -44,7 +44,7 @@ spec:
       serviceAccountName: my-service-account
       containers:
       - name: python-web-server-container
-        image: python-flask  # Use the Python image or your custom image
+        image: python-flask
         imagePullPolicy: Never
         ports:
         - containerPort: 5000
@@ -99,14 +99,13 @@ data:
                                 name="nginx-server",
                                 image="nginx",
                                 ports=[client.V1ContainerPort(container_port=80)]
-                                # Add any other container configuration as needed
                             )
                         ],
                         restart_policy="Never",
                     )
                 ),
-                active_deadline_seconds=60,
-                active_deadline_seconds=int((completion_time - datetime.now()).total_seconds()),  # Calculate the duration dynamically
+                active_deadline_seconds=10,
+                completions=1
             ),
         )
 
@@ -165,4 +164,3 @@ spec:
 #         ports:
 #         - containerPort: 8080
 #       restartPolicy: Never
-
