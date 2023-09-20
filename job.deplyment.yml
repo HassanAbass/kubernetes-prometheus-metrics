@@ -1,0 +1,168 @@
+# service-account.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: my-service-account
+---
+# role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: job-creator-role
+rules:
+- apiGroups: ["batch"]
+  resources: ["jobs"]
+  verbs: ["create"]
+---
+# role-binding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: bind-job-creator-role
+subjects:
+- kind: ServiceAccount
+  name: my-service-account
+roleRef:
+  kind: Role
+  name: job-creator-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: python-web-server-deployment
+spec:
+  selector:
+    matchLabels:
+      app: python-web-server
+  template:
+    metadata:
+      labels:
+        app: python-web-server
+    spec:
+      serviceAccountName: my-service-account
+      containers:
+      - name: python-web-server-container
+        image: python-flask  # Use the Python image or your custom image
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 5000
+        command: ["python", "/app/main.py"] 
+        volumeMounts:
+        - name: app-source
+          mountPath: /app
+      volumes:
+      - name: app-source
+        configMap:
+          name: python-web-server-config
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: python-web-server-config
+data:
+  main.py: |
+    from flask import Flask
+    import os
+    from kubernetes import client, config
+    from kubernetes.client.rest import ApiException
+
+    app = Flask(__name__)
+
+
+    @app.route('/')
+    def create_kubernetes_job():
+        # Load the Kubernetes configuration from the default location or provide your own kubeconfig file path.
+        try:
+            config.load_kube_config()
+        except config.config_exception.ConfigException:
+            config.load_incluster_config()  # Use in-cluster configuration if available
+
+        # Initialize the Kubernetes API client.
+        api_instance = client.BatchV1Api()
+
+        pod_labels = job_labels = {"app": "nginx-server"}
+
+        # Define the Job specification.
+        job = client.V1Job(
+            api_version="batch/v1",
+            kind="Job",
+            metadata=client.V1ObjectMeta(name="trigger-job", labels=pod_labels),
+            spec=client.V1JobSpec(
+                template=client.V1PodTemplateSpec(
+                    metadata=client.V1ObjectMeta(labels=pod_labels),
+                    spec=client.V1PodSpec(
+                        containers=[
+                            client.V1Container(
+                                name="nginx-server",
+                                image="nginx",
+                                ports=[client.V1ContainerPort(container_port=80)]
+                                # Add any other container configuration as needed
+                            )
+                        ],
+                        restart_policy="Never",
+                    )
+                ),
+                active_deadline_seconds=60,
+                active_deadline_seconds=int((completion_time - datetime.now()).total_seconds()),  # Calculate the duration dynamically
+            ),
+        )
+
+        # Create the Job.
+        try:
+            api_response = api_instance.create_namespaced_job(namespace="default", body=job)
+            print("Job created. Status='%s'" % str(api_response.status))
+            return "Job dispatched!!"
+        except ApiException as e:
+            print("Error creating the Job: %s" % e)
+            return "Error creating the Job: %s" % e
+
+
+    if __name__ == '__main__':
+        app.run(host='0.0.0.0', port=5000)
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: python-web-server
+spec:
+  selector:
+    app: python-web-server
+  type: LoadBalancer
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 5000
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-web-server
+spec:
+  selector:
+    app: nginx-server
+  type: LoadBalancer
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 80
+
+# ---
+# apiVersion: batch/v1
+# kind: Job
+# metadata:
+#   name: trigger-job
+# spec:
+#   template:
+#     spec:
+#       containers:
+#       - name: nginx-server
+#         image: nginx
+#         ports:
+#         - containerPort: 8080
+#       restartPolicy: Never
+
