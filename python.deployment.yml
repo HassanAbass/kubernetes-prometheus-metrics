@@ -25,37 +25,7 @@ spec:
       - name: app-source
         configMap:
           name: python-web-server-config
---- 
 
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: python-web-server-hpa
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: python-web-server-deployment
-  minReplicas: 1
-  maxReplicas: 2
-  metrics:
-  - type: External
-    external:
-      metric:
-        name: "http_requests_total"  # Replace with your custom metric name
-        selector:
-          matchLabels:
-            method: GET
-            endpoint: metrics
-      target: 
-        type: Value
-        value: 3
-      
-  # - type: External
-  #   external:
-  #     metric:
-  #       name: http_requests_total
-  #     targetValue: 3
 
 
 ---
@@ -90,8 +60,45 @@ data:
     if __name__ == '__main__':
         app.run(host='0.0.0.0', port=5000)
 
+--- 
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: python-web-server-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: python-web-server-deployment
+  minReplicas: 1
+  maxReplicas: 2
+  metrics:
+  # - type: Pods
+  #   pods:
+  #     metricName: http_requests_total
+  #     targetAverageValue: 3
+  # metrics:
+  - type: External
+    external:
+      metric:
+        name: "http_requests_total"  # Replace with your custom metric name
+        # selector:
+        #   matchLabels:
+        #     method: GET
+        #     endpoint: metrics
+      target: 
+        type: Value
+        value: 3
+      
+  # - type: External
+  #   external:
+  #     metric:
+  #       name: http_requests_total
+  #     targetValue: 3
 
 ---
+
+
 
 apiVersion: v1
 kind: Service
@@ -115,7 +122,7 @@ spec:
     app: python-web-server
   ports:
   - protocol: TCP
-    port: 8000  # The port you want to expose
+    port: 8080  # The port you want to expose
     targetPort: 5000  # The port on the pods you want to expose
 
 ---
@@ -155,12 +162,26 @@ metadata:
 data:
   prometheus.yml: |
     global:
-      scrape_interval: 15s
+      scrape_interval: 1s
 
     scrape_configs:
     - job_name: 'web-server'
       static_configs:
-      - targets: ['prom-web-server:8000']  # Service name and port of your web server
+      - targets: ['prom-web-server:8080']  # Service name and port of your web server
+  # config.yaml: |
+  #   prometheus-adapter:
+  #     rules:
+  #       default: false
+  #       custom:
+  #         - seriesQuery: 'http_requests_total'
+  #           resources:
+  #             overrides:
+  #               namespace:
+  #                 resource: namespace
+  #           name:
+  #             matches: ^(.*)
+  #             as: "http_requests_total"
+  #           metricsQuery: http_requests_total
 ---
 apiVersion: v1
 kind: Service
@@ -170,6 +191,18 @@ spec:
   selector:
     app: prometheus-server
   type: LoadBalancer
+  ports:
+    - protocol: TCP
+      port: 9090
+      targetPort: 9090
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prom-service
+spec:
+  selector:
+    app: prometheus-server
   ports:
     - protocol: TCP
       port: 9090
